@@ -27,10 +27,11 @@ It creates a mirror of your specified directories using [rsync](https://github.c
 
 ### Installation
 
-1. Clone the repository:
+1. Clone the repository and switch to the `release` branch:
    ```bash
    git clone https://github.com/Rinrin0413/Kagami-sh.git
    cd Kagami-sh
+   git switch release
    ```
 
 2. Make the script executable:
