@@ -25,6 +25,8 @@ done
 # This is used for both log files and trash directories.
 RUN_ID="$(date '+%Y%m%d_%H%M%S')_$$"
 
+START_TIME=$(date +%s)
+
 # ▼ Utility Functions ▼
 
 print_error() {
@@ -374,10 +376,25 @@ fi
 
 echo
 if [[ -n "$DRY_RUN_FLAG" ]]; then
-    echo "Dry run completed."
+    printf "Dry run completed"
 else
-    echo "All backups completed."
+    printf "All backups completed"
 fi
+printf " in "
+
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+HOURS=$((DURATION / 3600))
+MINUTES=$(( (DURATION % 3600) / 60 ))
+SECONDS=$((DURATION % 60))
+if (( 0 < HOURS )); then
+    printf "%dh %dm %ds" "$HOURS" "$MINUTES" "$SECONDS"
+elif (( 0 < MINUTES )); then
+    printf "%dm %ds" "$MINUTES" "$SECONDS"
+else
+    printf "%ds" "$SECONDS"
+fi
+echo "."
 
 # Report any failed targets.
 if [[ ${#FAILED_TARGETS[@]} -gt 0 ]]; then
