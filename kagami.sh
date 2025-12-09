@@ -8,7 +8,7 @@
 # Licensed under the MIT License.
 # See LICENSE file in the project root for full license information.
 
-VERSION=$(git describe --tags --always --dirty 2>/dev/null)
+VERSION=$(git describe --tags --always 2>/dev/null)
 if [ $? -ne 0 ]; then
     VERSION="(unknown version)"
 fi
