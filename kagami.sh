@@ -205,6 +205,44 @@ if [[ ! -f "$TARGETS" ]]; then
     exit 1
 fi
 
+# Read the target list before starting any backup or cleanup operations.
+# Capture and check grep's exit code so an empty file (exit 1) can be
+# distinguished from a file read failure (exit 2).
+TARGET_CONTENT="$(grep -E '.*' "$TARGETS")"
+TARGET_READ_EXIT_CODE=$?
+if [[ $TARGET_READ_EXIT_CODE -gt 1 ]]; then
+    print_error "Failed to read target list file: $TARGETS"
+    exit 1
+fi
+TARGET_LINES=()
+if [[ -n "$TARGET_CONTENT" ]]; then
+    mapfile -t TARGET_LINES <<< "$TARGET_CONTENT"
+fi
+
+# Read the manifest before starting any backup or cleanup operations.
+# Refuse to continue if it cannot be read, since it is required for safe cleanup.
+PREVIOUS_TARGETS=()
+if [[ -f "$MANIFEST_FILE" ]]; then
+    MANIFEST_CONTENT="$(grep -E '.*' "$MANIFEST_FILE")"
+    MANIFEST_READ_EXIT_CODE=$?
+    if [[ $MANIFEST_READ_EXIT_CODE -gt 1 ]]; then
+        print_error "Failed to read manifest file: $MANIFEST_FILE"
+        exit 1
+    fi
+
+    MANIFEST_LINES=()
+    if [[ -n "$MANIFEST_CONTENT" ]]; then
+        mapfile -t MANIFEST_LINES <<< "$MANIFEST_CONTENT"
+    fi
+
+    for line in "${MANIFEST_LINES[@]}"; do
+        if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^[[:space:]]*\# ]]; then
+            continue
+        fi
+        PREVIOUS_TARGETS+=("$line")
+    done
+fi
+
 # Load the exclude list file if it exists.
 EXCLUDE_LIST_FILE_NAME="excludes.conf"
 EXCLUDES_FILE="$SCRIPT_DIR/$EXCLUDE_LIST_FILE_NAME"
@@ -220,9 +258,12 @@ echo
 FAILED_TARGETS=()
 CURRENT_TARGETS=()
 
-# Read the target list file line by line.
-# Skip empty lines and comment lines that start with `#`.
-while read -r line || [[ -n "$line" ]]; do
+# Process the target list, skipping empty lines and comment lines that start with `#`.
+for line in "${TARGET_LINES[@]}"; do
+    if [[ "$line" =~ ^[[:space:]]*$ ]] || [[ "$line" =~ ^[[:space:]]*\# ]]; then
+        continue
+    fi
+
     print_separator
 
     # Replace leading tilde (`~`) with `$HOME`.
@@ -274,7 +315,7 @@ while read -r line || [[ -n "$line" ]]; do
         print_error "rsync failed for \`$SOURCE_PATH\` with exit code: $RSYNC_EXIT_CODE"
         FAILED_TARGETS+=("$SOURCE_PATH (rsync failed with exit code: $RSYNC_EXIT_CODE)")
     fi
-done < <(grep -Ev '^[[:space:]]*($|#)' "$TARGETS")
+done
 print_separator
 
 # Clean up stale backups (targets that were removed from the list).
@@ -282,7 +323,7 @@ TRASH_BASE_DIR="$DEST/.kagami-trash"
 TRASH_DIR="$TRASH_BASE_DIR/$RUN_ID"
 TRASH_CREATED=false
 if [[ -f "$MANIFEST_FILE" ]]; then
-    while IFS= read -r prev; do
+    for prev in "${PREVIOUS_TARGETS[@]}"; do
         # Check whether the previous target is still in the current list.
         found=false
         for curr in "${CURRENT_TARGETS[@]}"; do
@@ -348,7 +389,7 @@ if [[ -f "$MANIFEST_FILE" ]]; then
                 fi
             fi
         fi
-    done < <(grep -Ev '^[[:space:]]*($|#)' "$MANIFEST_FILE")
+    done
 fi
 
 # Update the manifest file with the current list of targets.
